@@ -71,7 +71,7 @@ class SimulatorTest(unittest.TestCase):
             for m in (ADT_A01, ORU_R01, ADT_A03):
                 w.write(to_mllp(m))
         self.simulator = subprocess.Popen([
-            "./simulator.py",
+            "./src/simulator.py",
             f"--mllp={TEST_MLLP_PORT}",
             f"--pager={TEST_PAGER_PORT}",
             f"--messages={messages_filename}"
