@@ -33,17 +33,28 @@ class HL7MessageParser:
 
     def _handle_oru_r01(self, message, mrn):
         """Handles ORU^R01 (Lab Results) messages."""
-        obr = message.OBR
-        obx = message.OBX
+        results = []
 
-        # Validate if the result is for creatinine
-        if obx.OBX_3.value != "CREATININE":
-            return "OTHER"
+        current_obr = None  # current message segment
 
-        creatinine_date = self._convert_to_datetime(obr.OBR_7.value)
-        creatinine_level = obx.OBX_5.value
+        for segment in message.children:  
+            if segment.name == "OBR":
+                current_obr = segment  
+            
+            elif segment.name == "OBX" and segment.OBX_3.value == "CREATININE":
+                creatinine_value = segment.OBX_5.value 
 
-        return "LIMS", {"mrn": mrn, "date": creatinine_date, "result": creatinine_level}
+                creatinine_date = self._convert_to_datetime(current_obr.OBR_7.value) if current_obr.OBR_7.value else " "
+
+                results.append({
+                    "result": creatinine_value,
+                    "date": creatinine_date
+                })
+
+        if not results:
+            return "OTHER"  # No Creatinine test found
+
+        return "LIMS", {"mrn": mrn, "results": results}
 
     @staticmethod
     def _convert_to_datetime(date_str):
@@ -66,11 +77,13 @@ class HL7MessageParser:
 
 if __name__ == "__main__":
     # Example HL7 message
-    message = (
+    message1 = (
         "MSH|^~\&|SIMULATION|SOUTH RIVERSIDE|||202401201630||ORU^R01|||2.5\r"
         "PID|1||478237423\r"
         "OBR|1||||||202401202243\r"
         "OBX|1|SN|CREATININE||103.4\r"
+        "OBR|1||||||202401202243\r"
+        "OBX|1|SN|CREATININE||100.4\r"
     )
 
     message2 = (
