@@ -20,6 +20,10 @@ MLLP_BUFFER_SIZE = 1024
 MLLP_TIMEOUT_SECONDS = 10
 SHUTDOWN_POLL_INTERVAL_SECONDS = 2
 
+'''
+The function serve_mllp_client handles client connections, sending HL7 messages over the MLLP protocol and checking for shutdown events.
+'''
+
 def serve_mllp_client(client, source, messages, shutdown_mllp, short_messages):
     i = 0
     buffer = b""
@@ -41,6 +45,10 @@ def serve_mllp_client(client, source, messages, shutdown_mllp, short_messages):
                     raise Exception("client closed connection")
                 buffer += r
                 received, buffer = parse_mllp_messages(buffer, source)
+                '''
+                The verify_ack function checks that there is exactly one acknowledgment message, verifying required HL7 segments like MSH and MSA. It ensures the MSA segment contains the "AA" acknowledgment code and returns a tuple with a boolean and an error message (if any).
+                '''
+
             acked, error = verify_ack(received)
             if error:
                 raise Exception(error)
@@ -62,6 +70,7 @@ def serve_mllp_client(client, source, messages, shutdown_mllp, short_messages):
 HL7_MSA_ACK_CODE_FIELD = 1
 HL7_MSA_ACK_CODE_ACCEPT = b"AA"
 
+# Does not check for 'AR/AE'
 def verify_ack(messages):
     if len(messages) != 1:
         return False, f"Expected 1 ack message, found {len(messages)}"
@@ -75,6 +84,10 @@ def verify_ack(messages):
     if len(fields) <= HL7_MSA_ACK_CODE_FIELD:
         return False, "Wrong number of fields in MSA segment"
     return fields[HL7_MSA_ACK_CODE_FIELD] == HL7_MSA_ACK_CODE_ACCEPT, None
+
+'''
+run_mllp_server function creates a TCP server that listens for client connections, binds to the specified host and port, and reuses the address. It sets a timeout and listens with a backlog of 1. In a loop, it accepts connections and starts a new thread to handle each client with serve_mllp_client.
+'''
 
 def run_mllp_server(host, port, hl7_messages, shutdown_mllp, short_messages):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -204,34 +217,100 @@ class PagerRequestHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(b"ok\n")
         self.shutdown()
 
+    def do_POST_predict(self):
+        # Call your prediction function (make_predictions)
+        prediction = make_predictions()  # Adjust as needed to pass any data
+        
+        if prediction == 'y':
+            # If prediction returns 'y', call do_POST_healthy
+            self.do_POST_healthy()
+        
+        else:
+            '''
+            Else part not important could just comment it.
+            '''
+            self.send_response(http.HTTPStatus.OK)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"No AKI detected.\n")
+
     def log_message(*args):
         pass # Prevent default logging
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--messages", default="messages.mllp", help="HL7 messages to replay, in MLLP format")
-    parser.add_argument("--mllp", default=8440, type=int, help="Port on which to replay HL7 messages via MLLP")
-    parser.add_argument("--pager", default=8441, type=int, help="Post on which to listen for pager requests via HTTP")
-    parser.add_argument("--short_messages", default=False, action="store_true", help="Encourage all outgoing messages to be split in two")
-    flags = parser.parse_args()
-    hl7_messages = read_hl7_messages(flags.messages)
-    shutdown_event = threading.Event()
-    mllp_thread = threading.Thread(target=run_mllp_server, args=("0.0.0.0", flags.mllp, hl7_messages, shutdown_event, flags.short_messages), daemon=True)
-    mllp_thread.start()
-    pager = None
-    def shutdown():
-        shutdown_event.set()
-        print("pager: graceful shutdown")
-        pager.shutdown()
-    signal.signal(signal.SIGTERM, lambda signal, frame: shutdown())
-    def new_pager_handler(*args, **kwargs):
-        return PagerRequestHandler(shutdown, *args, **kwargs)
-    pager = http.server.ThreadingHTTPServer(("0.0.0.0", flags.pager), new_pager_handler)
-    print(f"pager: listening on 0.0.0.0:{flags.pager}")
-    pager_thread = threading.Thread(target=pager.serve_forever, args=(), kwargs={"poll_interval": SHUTDOWN_POLL_INTERVAL_SECONDS}, daemon=True)
-    pager_thread.start()
-    mllp_thread.join()
-    pager_thread.join()
+'''
+Arguments:
+The program reads command-line arguments for:
+The file containing HL7 messages.
+The port numbers for the MLLP and HTTP servers.
+Whether to use the short message (split) mode.
+'''
 
-if __name__ == "__main__":
-    main()
+# def main():
+parser = argparse.ArgumentParser()
+parser.add_argument("--messages", default="messages.mllp", help="HL7 messages to replay, in MLLP format")
+parser.add_argument("--mllp", default=8440, type=int, help="Port on which to replay HL7 messages via MLLP")
+parser.add_argument("--pager", default=8441, type=int, help="Post on which to listen for pager requests via HTTP")
+parser.add_argument("--short_messages", default=False, action="store_true", help="Encourage all outgoing messages to be split in two")
+flags = parser.parse_args()
+
+print(flags)
+
+print("messages", flags.messages)
+hl7_messages = read_hl7_messages(flags.messages)
+
+'''
+hl17 is a list with size [81603]
+eg. b'MSH|^~\\&|SIMULATION|SOUTH RIVERSIDE|||20240101155700||ADT^A01|||2.5\rPID|1||115749348||ADRIANA EDWARDS||19750629|F\r'
+'''
+
+print("hl17", hl7_messages[0])
+
+lol
+'''
+A threading.Event (shutdown_event) is used to signal when the server should stop.
+'''
+
+shutdown_event = threading.Event()
+
+'''
+Thread for MLLP:
+A thread is created to run the MLLP server. It will listen for connections on the specified MLLP port and serve HL7 messages.
+'''
+
+mllp_thread = threading.Thread(target=run_mllp_server, args=("0.0.0.0", flags.mllp, hl7_messages, shutdown_event, flags.short_messages), daemon=True)
+mllp_thread.start()
+
+'''
+Shutdown Function:
+The shutdown function sets the shutdown event (stopping the MLLP server loop) and calls pager.shutdown() to stop the HTTP server.
+Signal Handling:
+The program registers the shutdown function to be called when a SIGTERM signal is received, ensuring a graceful exit.
+'''
+
+pager = None
+def shutdown():
+    shutdown_event.set()
+    print("pager: graceful shutdown")
+    pager.shutdown()
+
+signal.signal(signal.SIGTERM, lambda signal, frame: shutdown())
+
+def new_pager_handler(*args, **kwargs):
+    return PagerRequestHandler(shutdown, *args, **kwargs)
+pager = http.server.ThreadingHTTPServer(("0.0.0.0", flags.pager), new_pager_handler)
+print(f"pager: listening on 0.0.0.0:{flags.pager}")
+pager_thread = threading.Thread(target=pager.serve_forever, args=(), kwargs={"poll_interval": SHUTDOWN_POLL_INTERVAL_SECONDS}, daemon=True)
+pager_thread.start()
+
+'''
+Joining Threads:
+The main program waits for both the MLLP and HTTP server threads to finish. This typically happens when a shutdown is triggered.
+'''
+
+
+
+mllp_thread.join()
+pager_thread.join()
+
+# if __name__ == "__main__":
+#     main()
