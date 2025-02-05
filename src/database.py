@@ -1,18 +1,35 @@
 import os
 import sqlite3
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+from datetime import datetime
 
 
 class Database:
-    def __init__(self):
-        self.pat_db = sqlite3.connect("patients.db")
-        self.pat_cur = self.pat_db.cursor()
-        # TODO (jn424): specify dtype of columns
-        self.pat_cur.execute("CREATE TABLE patients(mrn, dob, sex)")
+    def __init__(self, pat_db_name="patients.db", tests_db_name="blood_tests.db"):
+        db_exists = os.path.exists(pat_db_name)
 
-        self.tests_db = sqlite3.connect("blood_tests.db")
+        self.pat_db = sqlite3.connect(pat_db_name)
+        self.pat_cur = self.pat_db.cursor()
+
+        self.tests_db = sqlite3.connect(tests_db_name)
         self.tests_cur = self.tests_db.cursor()
-        # TODO (jn424): specify dtype of columns
-        self.tests_cur.execute("CREATE TABLE blood_tests(mrn, timestamp, creatinine_level)")
+
+        if not db_exists:
+            self.pat_cur.execute("CREATE TABLE patients(mrn, dob, sex)")
+            self.tests_cur.execute("CREATE TABLE blood_tests(mrn, timestamp, creatinine_level)")
+
+    def populate_history(self, history_csv_path):
+        hist = pd.read_csv(history_csv_path)
+        for _, row in tqdm(hist.iterrows(), total=len(hist)):
+            row = row[~pd.isnull(row)]
+            mrn = row["mrn"]
+            date_creatinine = row.values[1:].reshape(-1, 2)
+            dates = list(map(datetime.fromisoformat, date_creatinine[:, 0]))
+            creatinine_levels = date_creatinine[:, 1].astype(np.float32)
+            for date, creatinine_level in zip(dates, creatinine_levels):
+                self.write_lims_data(mrn, date, creatinine_level)
 
     def write_pas_data(self, mrn, dob, sex):
         self.pat_cur.execute(f"""
@@ -53,7 +70,7 @@ class Database:
 
 if __name__ == "__main__":
     pas_messages = [
-        ("153541819", "19860417", 0),
+        ("149539321", "19860417", 0),
         ("124674001", "20230416", 1),
         ("186512977", "20180109", 0),
     ]
@@ -67,12 +84,13 @@ if __name__ == "__main__":
         ("186512977", "20240605113800", 102.66797910333874),
     ]
     db = Database()
+    db.populate_history("history.csv")
     for msg in pas_messages:
         db.write_pas_data(*msg)
 
     for msg in lims_messages:
         db.write_lims_data(*msg)
 
-    print(db.fetch_data(mrn="153541819"))
+    print(db.fetch_data(mrn="149539321"))
     print(db.fetch_data(mrn="186512977"))
     db.close()
