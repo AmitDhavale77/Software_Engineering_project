@@ -16,13 +16,13 @@ class Database:
 
     def write_pas_data(self, mrn, dob, sex):
         self.pat_cur.execute(f"""
-            INSERT INTO patients VALUES ({mrn}, {dob}, {sex})
+            INSERT INTO patients VALUES ({mrn}, '{dob}', {sex})
         """)
         self.pat_db.commit()
 
     def write_lims_data(self, mrn, date, result):
         self.tests_cur.execute(f"""
-            INSERT INTO blood_tests VALUES ({mrn}, {date}, {result})
+            INSERT INTO blood_tests VALUES ({mrn}, '{date}', {result})
         """)
         self.tests_db.commit()
 
