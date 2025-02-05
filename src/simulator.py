@@ -11,9 +11,9 @@ import argparse
 import csv
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from xgboost import XGBClassifier
-from model import make_predictions
+#from sklearn.preprocessing import StandardScaler
+#from xgboost import XGBClassifier
+##from model import make_predictions
 
 VERSION = "0.0.6"
 MLLP_BUFFER_SIZE = 1024
