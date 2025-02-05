@@ -1,6 +1,5 @@
 import os
 import sqlite3
-import datetime
 
 
 class Database:
@@ -21,9 +20,9 @@ class Database:
         """)
         self.pat_db.commit()
 
-    def write_lims_data(self, mrn, timestamp, creatinine_level):
+    def write_lims_data(self, mrn, date, result):
         self.tests_cur.execute(f"""
-            INSERT INTO blood_tests VALUES ({mrn}, {timestamp}, {creatinine_level})
+            INSERT INTO blood_tests VALUES ({mrn}, {date}, {result})
         """)
         self.tests_db.commit()
 
@@ -34,6 +33,18 @@ class Database:
     def read_lims_data(self, mrn):
         res = self.tests_cur.execute(f"SELECT * FROM blood_tests WHERE mrn={mrn}")
         return res.fetchall()
+
+    def fetch_data(self, mrn):
+        pas_data = self.read_pas_data(mrn)[0]
+        lims_data = self.read_lims_data(mrn)
+        data = {
+            "mrn": pas_data[0],
+            "dob": pas_data[1],
+            "sex": pas_data[2],
+            "dates": [ld[1] for ld in lims_data],
+            "creatinine_levels": [ld[2] for ld in lims_data],
+        }
+        return data
 
     def close(self):
         self.pat_db.close()
@@ -62,9 +73,6 @@ if __name__ == "__main__":
     for msg in lims_messages:
         db.write_lims_data(*msg)
 
-    print(db.read_pas_data(mrn="153541819"))
-    print(db.read_lims_data(mrn="186512977"))
+    print(db.fetch_data(mrn="153541819"))
+    print(db.fetch_data(mrn="186512977"))
     db.close()
-
-    os.remove("patients.db")
-    os.remove("blood_tests.db")
