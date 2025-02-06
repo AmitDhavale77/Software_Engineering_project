@@ -21,8 +21,6 @@ def to_mllp(segments):
     m += bytes(chr(simulator.MLLP_END_OF_BLOCK) + chr(simulator.MLLP_CARRIAGE_RETURN), "ascii")
     return m
 
-def from_mllp(buffer):
-    return str(buffer[1:-3], "ascii").split("\r") # Strip MLLP framing and final \r
 
 if __name__ == "__main__":
     MLLP_HOST, MLLP_PORT = os.getenv("MLLP_ADDRESS").split(":")
@@ -41,7 +39,7 @@ if __name__ == "__main__":
             buffer = s.recv(MLLP_BUFFER_SIZE)
             if len(buffer) == 0:
                 break
-            message = from_mllp(buffer)
+            message = simulator.parse_mllp_messages(buffer, "")[0][0]
             msg, fields = parser.parse(message.decode("utf-8"))
             mrn = fields["mrn"]
 
