@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     parser = HL7MessageParser()
     db = Database()
-    # db.populate_history("/data/history.csv")
+    db.populate_history("/data/history.csv")
     predictor = AKIPredictor("/simulator/scaler.pkl", "/simulator/xgb_model.pkl")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
