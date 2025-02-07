@@ -64,6 +64,8 @@ class HL7MessageParser:
         try:
             if len(date_str) == 8:
                 dt = datetime.strptime(date_str, "%Y%m%d")
+            elif len(date_str) == 10:
+                dt = datetime.strptime(date_str, "%Y%m%d%H")
             elif len(date_str) == 12:
                 dt = datetime.strptime(date_str, "%Y%m%d%H%M")
             elif len(date_str) == 14:
