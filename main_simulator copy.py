@@ -2,10 +2,10 @@ import os
 import socket
 import urllib.request
 
-from database import Database
-from parser import HL7MessageParser
-from model_class import AKIPredictor
-import simulator
+from src.database import Database
+from src.parser import HL7MessageParser
+from model.model_class import AKIPredictor
+import src.simulator as simulator
 
 
 MLLP_BUFFER_SIZE = 1024
@@ -23,15 +23,16 @@ def to_mllp(segments):
 
 
 if __name__ == "__main__":
-    MLLP_HOST, MLLP_PORT = os.getenv("MLLP_ADDRESS").split(":")
+    # print(os.getenv("MLLP_ADDRESS"))
+    MLLP_HOST, MLLP_PORT = os.getenv("MLLP_ADDRESS", "127.0.0.1:8440").split(":")
     MLLP_PORT = int(MLLP_PORT)
-    PAGER_HOST, PAGER_PORT = os.getenv("PAGER_ADDRESS").split(":")
+    PAGER_HOST, PAGER_PORT = os.getenv("PAGER_ADDRESS", "127.0.0.1:8441").split(":")
     PAGER_PORT = int(PAGER_PORT)
 
     parser = HL7MessageParser()
     db = Database()
-    db.populate_history("/data/history.csv")
-    predictor = AKIPredictor("/simulator/scaler.pkl", "/simulator/xgb_model.pkl")
+    db.populate_history("history.csv")
+    predictor = AKIPredictor("model/scaler.pkl", "model/xgb_model.pkl")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((MLLP_HOST, MLLP_PORT))
