@@ -212,7 +212,7 @@ def main():
     parser.add_argument("--messages", default="messages.mllp", help="HL7 messages to replay, in MLLP format")
     parser.add_argument("--mllp", default=8440, type=int, help="Port on which to replay HL7 messages via MLLP")
     parser.add_argument("--pager", default=8441, type=int, help="Post on which to listen for pager requests via HTTP")
-    parser.add_argument("--short_messages", default=False, action="store_true", help="Encourage all outgoing messages to be split in two")
+    parser.add_argument("--short_messages", default=True, action="store_true", help="Encourage all outgoing messages to be split in two")
     flags = parser.parse_args()
     hl7_messages = read_hl7_messages(flags.messages)
     shutdown_event = threading.Event()

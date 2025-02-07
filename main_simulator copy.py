@@ -36,25 +36,31 @@ if __name__ == "__main__":
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((MLLP_HOST, MLLP_PORT))
+        buffer = b""  # Buffer to store incomplete messages
+
         while True:
-            buffer = s.recv(MLLP_BUFFER_SIZE)
-            if len(buffer) == 0:
+            data = s.recv(MLLP_BUFFER_SIZE)
+            if len(data) == 0:
                 break
-            message = simulator.parse_mllp_messages(buffer, "")[0][0]
-            msg, fields = parser.parse(message.decode("utf-8"))
-            mrn = fields["mrn"]
+            
+            buffer += data # Append received data to buffer
+            messages, buffer = simulator.parse_mllp_messages(buffer, "")
 
-            if msg == "PAS_admit":
-                db.write_pas_data(**fields)
-            elif msg == "LIMS":
-                for obs in fields["results"]:
-                    db.write_lims_data(mrn, **obs)
+            for message in messages:
+                msg, fields = parser.parse(message.decode("utf-8"))
+                mrn = fields["mrn"]
 
-            if msg == "LIMS":
-                data = db.fetch_data(mrn)
-                preds = predictor.predict(data)
-                if preds[0][0] == "y":
-                    data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}"
-                    r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=data.encode("utf-8"))
-            s.sendall(to_mllp(ACK))
+                if msg == "PAS_admit":
+                    db.write_pas_data(**fields)
+                elif msg == "LIMS":
+                    for obs in fields["results"]:
+                        db.write_lims_data(mrn, **obs)
+
+                if msg == "LIMS":
+                    data = db.fetch_data(mrn)
+                    preds = predictor.predict(data)
+                    if preds[0][0] == "y":
+                        data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}"
+                        r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=data.encode("utf-8"))
+                s.sendall(to_mllp(ACK))
     db.close()
