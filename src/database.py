@@ -27,7 +27,7 @@ class Database:
         if res[0] > 0:
             print("Database already populated. Skipping history loading.")
             return
-        
+        # Below this point is the org code
         print("Populating database from history.csv...")
         hist = pd.read_csv(history_csv_path)
         for _, row in tqdm(hist.iterrows(), total=len(hist)):
