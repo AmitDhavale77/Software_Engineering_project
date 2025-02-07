@@ -1,5 +1,5 @@
 import unittest
-from parser import HL7MessageParser
+from src.parser import HL7MessageParser
 
 class TestHL7MessageParser(unittest.TestCase):
 
