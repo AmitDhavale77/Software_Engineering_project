@@ -23,7 +23,7 @@ class HL7MessageParser:
         """Handles ADT^A01 (Patient Admission) messages."""
         dob = self._convert_to_datetime(pid.PID_7.value)
         sex = pid.PID_8.value
-        sex = 1 if sex == "F" else 0
+        sex = {"M": 0, "F": 1}.get(sex, None)
         mrn = pid.PID_3.value
         return "PAS_admit", {"mrn": mrn, "dob": dob, "sex": sex}
 
