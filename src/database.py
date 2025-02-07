@@ -21,6 +21,14 @@ class Database:
             self.tests_cur.execute("CREATE TABLE blood_tests(mrn, timestamp, creatinine_level)")
 
     def populate_history(self, history_csv_path):
+        
+        # Check if the database is already populated with history data
+        res = self.tests_cur.execute("SELECT COUNT(*) FROM blood_tests").fetchone()
+        if res[0] > 0:
+            print("Database already populated. Skipping history loading.")
+            return
+        
+        print("Populating database from history.csv...")
         hist = pd.read_csv(history_csv_path)
         for _, row in tqdm(hist.iterrows(), total=len(hist)):
             row = row[~pd.isnull(row)]
