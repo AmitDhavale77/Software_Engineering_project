@@ -15,6 +15,7 @@ ACK = [
     r"MSA|AA",
 ]
 
+
 def to_mllp(segments):
     m = bytes(chr(simulator.MLLP_START_OF_BLOCK), "ascii")
     m += bytes("\r".join(segments) + "\r", "ascii")
@@ -30,7 +31,7 @@ if __name__ == "__main__":
 
     parser = HL7MessageParser()
     db = Database()
-    # db.populate_history("/data/history.csv")
+    db.populate_history("/data/history.csv")
     predictor = AKIPredictor("/simulator/scaler.pkl", "/simulator/xgb_model.pkl")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -41,8 +42,8 @@ if __name__ == "__main__":
             data = s.recv(MLLP_BUFFER_SIZE)
             if len(data) == 0:
                 break
-            
-            buffer += data # Append received data to buffer
+
+            buffer += data  # Append received data to buffer
             messages, buffer = simulator.parse_mllp_messages(buffer, "")
 
             for message in messages:
@@ -58,7 +59,7 @@ if __name__ == "__main__":
                 if msg == "LIMS":
                     data = db.fetch_data(mrn)
                     preds = predictor.predict(data)
-                    if preds[0][0] == "y":
+                    if preds[0] == 1:
                         data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}"
                         r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=data.encode("utf-8"))
                 s.sendall(to_mllp(ACK))

@@ -1,9 +1,10 @@
 import pandas as pd
-import os
+from tqdm import tqdm
+
 from src.database import Database
 from src.parser import HL7MessageParser
-from model.model_class import AKIPredictor
 from src.simulator import read_hl7_messages
+from model.model_class import AKIPredictor
 
 
 if __name__ == "__main__":
@@ -14,21 +15,22 @@ if __name__ == "__main__":
     predictor = AKIPredictor("model\\scaler.pkl", "model\\xgb_model.pkl")
     outputs = []
 
-    for message in hl7_messages:
+    for message in tqdm(hl7_messages):
         msg, fields = parser.parse(message.decode("utf-8"))
+        mrn = fields["mrn"]
 
         if msg == "PAS_admit":
             db.write_pas_data(**fields)
         elif msg == "LIMS":
-            db.write_lims_data(**fields)
+            for obs in fields["results"]:
+                db.write_lims_data(mrn, **obs)
         else:
             continue
 
         if msg == "LIMS":
-            mrn = fields["mrn"]
             data = db.fetch_data(mrn)
             preds = predictor.predict(data)
-            if preds[0][0] == "y":
+            if preds[0] == 1:
                 outputs.append([mrn, preds[2]])
 
     output = pd.DataFrame(outputs, columns=["mrn", "timestamp"])
