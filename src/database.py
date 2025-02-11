@@ -2,7 +2,6 @@ import os
 import sqlite3
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from datetime import datetime
 
 
@@ -20,24 +19,29 @@ class Database:
             self.pat_cur.execute("CREATE TABLE patients(mrn, dob, sex)")
             self.tests_cur.execute("CREATE TABLE blood_tests(mrn, timestamp, creatinine_level)")
 
-    def populate_history(self, history_csv_path):
-        
-        # Check if the database is already populated with history data
-        res = self.tests_cur.execute("SELECT COUNT(*) FROM blood_tests").fetchone()
-        if res[0] > 0:
-            print("Database already populated. Skipping history loading.")
+        self.history_populated = False
+
+    def populate_history(self, history_csv_path, force=False):
+        if self.history_populated and not force:
             return
-        # Below this point is the org code
-        print("Populating database from history.csv...")
+
         hist = pd.read_csv(history_csv_path)
-        for _, row in tqdm(hist.iterrows(), total=len(hist)):
+        hist_rows = []
+
+        for _, row in hist.iterrows():
             row = row[~pd.isnull(row)]
             mrn = row["mrn"]
             date_creatinine = row.values[1:].reshape(-1, 2)
             dates = list(map(datetime.fromisoformat, date_creatinine[:, 0]))
             creatinine_levels = date_creatinine[:, 1].astype(np.float32)
             for date, creatinine_level in zip(dates, creatinine_levels):
-                self.write_lims_data(mrn, date, creatinine_level)
+                hist_rows.append(f"({mrn}, '{date}', {creatinine_level})")
+
+        self.tests_cur.execute(f"""
+            INSERT INTO blood_tests VALUES {", ".join(hist_rows)}
+        """)
+        self.tests_db.commit()
+        self.history_populated = True
 
     def write_pas_data(self, mrn, dob, sex):
         self.pat_cur.execute(f"""
