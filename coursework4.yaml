@@ -34,7 +34,7 @@ spec:
         args:
         # Replace this with however you tell your solution where to find the
         # initial history file. /data is mounted below.
-        - "--history=data/history.csv"
+        - "--history=/data/history.csv"
         env:
         - name: MLLP_ADDRESS
           value: alamillo-simulator.coursework4:8440
