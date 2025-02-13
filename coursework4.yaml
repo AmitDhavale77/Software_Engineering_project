@@ -32,7 +32,7 @@ spec:
       - name: aki-detection
         image: imperialswemlsspring2025.azurecr.io/coursework4-alamillo
         # Replace this with the correct command for your solution
-        command: ["/simulator/main_simulator.py"]
+        command: ["/simulator/bin/python3", "/simulator/main_simulator.py"]
         args:
         # Replace this with however you tell your solution where to find the
         # initial history file. /data is mounted below.
