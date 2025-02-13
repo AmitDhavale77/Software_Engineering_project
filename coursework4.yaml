@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
       - name: aki-detection
-        image: imperialswemlsspring2025.azurecr.io/coursework4-GROUP_NAME
+        image: imperialswemlsspring2025.azurecr.io/coursework4-alamillo
         # Replace this with the correct command for your solution
         command: ["/simulator/main_simulator.py"]
         args:
