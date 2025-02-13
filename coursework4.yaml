@@ -18,6 +18,8 @@ metadata:
   namespace: alamillo
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: aki-detection
@@ -51,7 +53,7 @@ spec:
             name: aki-detection-state
         resources:
           requests:
-            memory: 1Gi
+            memory: 1G
             cpu: 1
       initContainers:
       - name: copy-hospital-history
@@ -61,7 +63,7 @@ spec:
             name: hospital-history
         resources:
           requests:
-            memory: 1Gi
+            memory: 1G
             cpu: 1
       volumes:
       - name: hospital-history
