@@ -6,6 +6,7 @@ from database import Database
 from parser import HL7MessageParser
 from model_class import AKIPredictor
 import simulator
+import logging
 
 
 MLLP_BUFFER_SIZE = 1024
@@ -23,7 +24,17 @@ def to_mllp(segments):
     return m
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
+
 if __name__ == "__main__":
+    logger = logging.getLogger(__name__)
+
+    logger.info("Starting system")
+
     MLLP_HOST, MLLP_PORT = os.getenv("MLLP_ADDRESS").split(":")
     MLLP_PORT = int(MLLP_PORT)
     PAGER_HOST, PAGER_PORT = os.getenv("PAGER_ADDRESS").split(":")
@@ -32,6 +43,8 @@ if __name__ == "__main__":
     parser = HL7MessageParser()
     db = Database()
     db.populate_history("/data/history.csv")
+    logger.info("Database loaded successfully.")
+
     predictor = AKIPredictor("/simulator/scaler.pkl", "/simulator/xgb_model.pkl")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -47,25 +60,24 @@ if __name__ == "__main__":
             messages, buffer = simulator.parse_mllp_messages(buffer, "")
 
             for message in messages:
-                print(f"message received: {message}")
                 msg, fields = parser.parse(message.decode("utf-8"))
                 mrn = fields["mrn"]
 
                 if msg == "PAS_admit":
                     db.write_pas_data(**fields)
-                    print("PAS message saved")
+                    logger.info(f"PAS stored successfully for MRN: {mrn}, {fields}")
                 elif msg == "LIMS":
                     for obs in fields["results"]:
                         db.write_lims_data(mrn, **obs)
-                    print("LIMS saved")
+                    logger.info(f"LIMS data stored successfully for MRN: {mrn}")
 
                 if msg == "LIMS":
                     data = db.fetch_data(mrn)
                     preds = predictor.predict(data)
+                    logger.info(f"Prediction: {preds[0]}, made for MRN: {mrn}, timestamp: {preds[2]}")
                     if preds[0] == 1:
                         data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}"
                         r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=data.encode("utf-8"))
-                    print("prediction saved")
                 s.sendall(to_mllp(ACK))
-                print("acknowledgement sent")
+                logger.info("Acknowledgement sent")
     db.close()
