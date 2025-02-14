@@ -42,7 +42,7 @@ spec:
           value: alamillo-simulator.coursework4:8440
         - name: PAGER_ADDRESS
           value: alamillo-simulator.coursework4:8441
-        - name: PYTHONBUFFERED
+        - name: PYTHONUNBUFFERED
           value: 1
         ports:
         - name: http
