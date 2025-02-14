@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 import socket
 import urllib.request
@@ -49,14 +47,17 @@ if __name__ == "__main__":
             messages, buffer = simulator.parse_mllp_messages(buffer, "")
 
             for message in messages:
+                print(f"message received: {message}")
                 msg, fields = parser.parse(message.decode("utf-8"))
                 mrn = fields["mrn"]
 
                 if msg == "PAS_admit":
                     db.write_pas_data(**fields)
+                    print("PAS message saved")
                 elif msg == "LIMS":
                     for obs in fields["results"]:
                         db.write_lims_data(mrn, **obs)
+                    print("LIMS saved")
 
                 if msg == "LIMS":
                     data = db.fetch_data(mrn)
@@ -64,5 +65,7 @@ if __name__ == "__main__":
                     if preds[0] == 1:
                         data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}"
                         r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=data.encode("utf-8"))
+                    print("prediction saved")
                 s.sendall(to_mllp(ACK))
+                print("acknowledgement sent")
     db.close()

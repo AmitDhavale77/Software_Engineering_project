@@ -12,26 +12,33 @@ if __name__ == "__main__":
 
     parser = HL7MessageParser()
     db = Database()
-    predictor = AKIPredictor("model\\scaler.pkl", "model\\xgb_model.pkl")
+    predictor = AKIPredictor("model/scaler.pkl", "model/xgb_model.pkl")
     outputs = []
 
-    for message in tqdm(hl7_messages):
+    for message in tqdm(hl7_messages[:5000]):
+        print(f"message received: {message}")
         msg, fields = parser.parse(message.decode("utf-8"))
         mrn = fields["mrn"]
 
         if msg == "PAS_admit":
             db.write_pas_data(**fields)
+            print("PAS message saved")
         elif msg == "LIMS":
             for obs in fields["results"]:
                 db.write_lims_data(mrn, **obs)
+            print("LIMS saved")
         else:
             continue
 
         if msg == "LIMS":
+            print("LIMS predictor")
             data = db.fetch_data(mrn)
             preds = predictor.predict(data)
             if preds[0] == 1:
                 outputs.append([mrn, preds[2]])
+            print("")
+            print(f"prediction: {preds[0]}")
+            print("prediction saved")
 
     output = pd.DataFrame(outputs, columns=["mrn", "timestamp"])
     output.to_csv("pred_aki.csv", index=False)
