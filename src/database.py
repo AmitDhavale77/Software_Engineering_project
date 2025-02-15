@@ -7,7 +7,7 @@ from datetime import datetime
 
 class Database:
     def __init__(self, pat_db_name="patients.db", tests_db_name="blood_tests.db"):
-        db_exists = os.path.exists(pat_db_name)
+        self.db_exists = os.path.exists(pat_db_name)
 
         self.pat_db = sqlite3.connect(pat_db_name)
         self.pat_cur = self.pat_db.cursor()
@@ -15,14 +15,12 @@ class Database:
         self.tests_db = sqlite3.connect(tests_db_name)
         self.tests_cur = self.tests_db.cursor()
 
-        if not db_exists:
+        if not self.db_exists:
             self.pat_cur.execute("CREATE TABLE patients(mrn, dob, sex)")
             self.tests_cur.execute("CREATE TABLE blood_tests(mrn, timestamp, creatinine_level)")
 
-        self.history_populated = False
-
-    def populate_history(self, history_csv_path, force=False):
-        if self.history_populated and not force:
+    def populate_history(self, history_csv_path):
+        if self.db_exists:
             return
 
         hist = pd.read_csv(history_csv_path)
@@ -41,7 +39,6 @@ class Database:
             INSERT INTO blood_tests VALUES {", ".join(hist_rows)}
         """)
         self.tests_db.commit()
-        self.history_populated = True
 
     def write_pas_data(self, mrn, dob, sex):
         self.pat_cur.execute(f"""

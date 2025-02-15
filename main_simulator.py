@@ -1,12 +1,13 @@
 import os
 import socket
+import logging
+import argparse
 import urllib.request
 
 from database import Database
 from parser import HL7MessageParser
 from model_class import AKIPredictor
 import simulator
-import logging
 
 
 MLLP_BUFFER_SIZE = 1024
@@ -32,7 +33,6 @@ logging.basicConfig(
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
-
     logger.info("Starting system")
 
     MLLP_HOST, MLLP_PORT = os.getenv("MLLP_ADDRESS").split(":")
@@ -40,9 +40,13 @@ if __name__ == "__main__":
     PAGER_HOST, PAGER_PORT = os.getenv("PAGER_ADDRESS").split(":")
     PAGER_PORT = int(PAGER_PORT)
 
-    parser = HL7MessageParser()
-    db = Database()
-    db.populate_history("/data/history.csv")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--history", default="/data/history.csv", help="Path to history.csv")
+    flags = parser.parse_args()
+
+    msg_parser = HL7MessageParser()
+    db = Database("/state/patients.db", "/state/blood_tests.db")
+    db.populate_history(flags.history)
     logger.info("Database loaded successfully.")
 
     predictor = AKIPredictor("/simulator/scaler.pkl", "/simulator/xgb_model.pkl")
@@ -60,16 +64,17 @@ if __name__ == "__main__":
             messages, buffer = simulator.parse_mllp_messages(buffer, "")
 
             for message in messages:
-                msg, fields = parser.parse(message.decode("utf-8"))
+                msg, fields = msg_parser.parse(message.decode("utf-8"))
                 mrn = fields["mrn"]
 
                 if msg == "PAS_admit":
                     db.write_pas_data(**fields)
-                    logger.info(f"PAS stored successfully for MRN: {mrn}, {fields}")
                 elif msg == "LIMS":
                     for obs in fields["results"]:
                         db.write_lims_data(mrn, **obs)
-                    logger.info(f"LIMS data stored successfully for MRN: {mrn}")
+
+                logger.info(f"{msg} message parsed successfully for MRN: {mrn}")
+                logger.info(f"Parsed fields: {fields}")
 
                 if msg == "LIMS":
                     data = db.fetch_data(mrn)
