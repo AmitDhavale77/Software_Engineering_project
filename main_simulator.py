@@ -49,7 +49,7 @@ if __name__ == "__main__":
     db.populate_history(flags.history)
     logger.info("Database loaded successfully.")
 
-    predictor = AKIPredictor("/simulator/scaler.pkl", "/simulator/xgb_model.pkl")
+    predictor = AKIPredictor("/simulator/xgb_model.pkl")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((MLLP_HOST, MLLP_PORT))

@@ -4,15 +4,7 @@ from datetime import datetime
 
 
 class AKIPredictor:
-    def __init__(self, scaler_path="scaler.pkl", model_path="xgb_model.pkl"):
-        with open(scaler_path, "rb") as f:
-            scaler = pickle.load(f)
-
-        self.mean = scaler.mean_[[1, 2, 0, 3]]
-        self.mean = np.insert(self.mean, 3, 0)
-        self.std = scaler.scale_[[1, 2, 0, 3]]
-        self.std = np.insert(self.std, 3, 1)
-
+    def __init__(self, model_path="xgb_model.pkl"):
         with open(model_path, "rb") as f:
             self.model = pickle.load(f)
 
@@ -27,17 +19,14 @@ class AKIPredictor:
         sex = input_dict["sex"]
         creatinine_levels = input_dict["creatinine_levels"]
 
-        min_ls = min(creatinine_levels)
-        median_ls = float(np.median(creatinine_levels))
-        most_recent_creatinine_result = creatinine_levels[-1]
+        latest_creatinine = creatinine_levels[-1]
+        rv1 = latest_creatinine / np.min(creatinine_levels)
+        rv2 = latest_creatinine / np.median(creatinine_levels)
 
-        new_data = np.asarray(
-            [min_ls, median_ls, age, sex, most_recent_creatinine_result]
-        )
+        new_data = np.asarray([age, sex, latest_creatinine, rv1, rv2])
         return new_data, mrn, latest_date
 
     def predict(self, data):
         processed_data, mrn, latest_date = self.preprocess_and_transform(data)
-        processed_data = (processed_data - self.mean) / self.std
         y_pred = self.model.predict(processed_data[None, :])[0]
         return y_pred, mrn, latest_date
