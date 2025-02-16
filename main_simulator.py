@@ -7,22 +7,8 @@ import urllib.request
 from database import Database
 from parser import HL7MessageParser
 from model_class import AKIPredictor
+from acknowledgements import create_acknowledgement
 import simulator
-
-
-MLLP_BUFFER_SIZE = 1024
-
-ACK = [
-    r"MSH|^~\&|||||20240129093837||ACK|||2.5",
-    r"MSA|AA",
-]
-
-
-def to_mllp(segments):
-    m = bytes(chr(simulator.MLLP_START_OF_BLOCK), "ascii")
-    m += bytes("\r".join(segments) + "\r", "ascii")
-    m += bytes(chr(simulator.MLLP_END_OF_BLOCK) + chr(simulator.MLLP_CARRIAGE_RETURN), "ascii")
-    return m
 
 
 logging.basicConfig(
@@ -56,7 +42,7 @@ if __name__ == "__main__":
         buffer = b""  # Buffer to store incomplete messages
 
         while True:
-            data = s.recv(MLLP_BUFFER_SIZE)
+            data = s.recv(simulator.MLLP_BUFFER_SIZE)
             if len(data) == 0:
                 break
 
@@ -83,6 +69,6 @@ if __name__ == "__main__":
                     if preds[0] == 1:
                         data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}"
                         r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=data.encode("utf-8"))
-                s.sendall(to_mllp(ACK))
+                s.sendall(create_acknowledgement("AA"))
                 logger.info("Acknowledgement sent")
     db.close()
