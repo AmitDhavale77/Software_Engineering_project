@@ -1,5 +1,8 @@
 import os
+import sys
+import time
 import socket
+import signal
 import logging
 import argparse
 import urllib.request
@@ -12,9 +15,24 @@ import simulator
 
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+
+MLLP_RETRY_SECONDS = 1
+
+
+def connect_to_mllp_server(host, port):
+    while True:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host, port))
+            logger.info("Connected to MLLP server")
+            break
+        except Exception as e:
+            logger.warning(f"MLLP connection failed: {e}. Retrying in {MLLP_RETRY_SECONDS}s")
+            time.sleep(MLLP_RETRY_SECONDS)
+    return s
 
 
 if __name__ == "__main__":
@@ -37,38 +55,55 @@ if __name__ == "__main__":
 
     predictor = AKIPredictor("/simulator/xgb_model.pkl")
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((MLLP_HOST, MLLP_PORT))
-        buffer = b""  # Buffer to store incomplete messages
+    s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT)
+    buffer = b""  # Buffer to store incomplete messages
 
-        while True:
-            data = s.recv(simulator.MLLP_BUFFER_SIZE)
-            if len(data) == 0:
-                break
+    def graceful_shutdown(signum, frame):
+        logger.info("Shutting down system.")
+        db.close()
+        s.close()
+        sys.exit(0)
 
-            buffer += data  # Append received data to buffer
-            messages, buffer = simulator.parse_mllp_messages(buffer, "")
+    signal.signal(signal.SIGTERM, graceful_shutdown)
 
-            for message in messages:
-                msg, fields = msg_parser.parse(message.decode("utf-8"))
-                mrn = fields["mrn"]
+    while True:
+        data = s.recv(simulator.MLLP_BUFFER_SIZE)
+        if len(data) == 0:
+            logger.warning("MLLP connection closed by peer. Reconnecting")
+            s.close()
+            s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT)
+            continue
 
-                if msg == "PAS_admit":
-                    db.write_pas_data(**fields)
-                elif msg == "LIMS":
-                    for obs in fields["results"]:
-                        db.write_lims_data(mrn, **obs)
+        buffer += data  # Append received data to buffer
+        messages, buffer = simulator.parse_mllp_messages(buffer, "")
+        for message in messages:
+            msg, fields = msg_parser.parse(message.decode("utf-8"))
+            mrn = fields["mrn"]
 
-                logger.info(f"{msg} message parsed successfully for MRN: {mrn}")
-                logger.info(f"Parsed fields: {fields}")
+            if msg == "PAS_admit":
+                db.write_pas_data(**fields)
+            elif msg == "LIMS":
+                for obs in fields["results"]:
+                    db.write_lims_data(mrn, **obs)
 
-                if msg == "LIMS":
-                    data = db.fetch_data(mrn)
-                    preds = predictor.predict(data)
-                    logger.info(f"Prediction: {preds[0]}, made for MRN: {mrn}, timestamp: {preds[2]}")
-                    if preds[0] == 1:
-                        data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}"
-                        r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=data.encode("utf-8"))
-                s.sendall(create_acknowledgement("AA"))
-                logger.info("Acknowledgement sent")
-    db.close()
+            logger.info(f"{msg} message parsed successfully for MRN: {mrn}")
+            logger.debug(f"Parsed fields: {fields}")
+
+            if msg == "LIMS":
+                data = db.fetch_data(mrn)
+                preds = predictor.predict(data)
+                logger.info(f"Prediction: {preds[0]}, made for MRN: {mrn}, timestamp: {preds[2]}")
+
+                if preds[0] == 1:
+                    pager_data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}".encode("utf-8")
+                    while True:
+                        try:
+                            r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=pager_data)
+                            logger.info(f"Pager request sent successfully for MRN: {mrn}")
+                            break
+                        except Exception as e:
+                            logger.warning(f"Pager request failed: {e}. Retrying in {MLLP_RETRY_SECONDS}s")
+                            time.sleep(MLLP_RETRY_SECONDS)
+
+            s.sendall(create_acknowledgement("AA"))
+            logger.info("Acknowledgement sent")
