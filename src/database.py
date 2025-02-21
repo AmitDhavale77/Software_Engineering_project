@@ -53,15 +53,17 @@ class Database:
         self.tests_db.commit()
 
     def read_pas_data(self, mrn):
-        res = self.pat_cur.execute(f"SELECT * FROM patients WHERE mrn={mrn}")
-        return res.fetchall()
+        res = self.pat_cur.execute(
+            f"SELECT * FROM patients WHERE mrn={mrn} ORDER BY rowid DESC"
+        )
+        return res.fetchone()
 
     def read_lims_data(self, mrn):
         res = self.tests_cur.execute(f"SELECT * FROM blood_tests WHERE mrn={mrn}")
         return res.fetchall()
 
     def fetch_data(self, mrn):
-        pas_data = self.read_pas_data(mrn)[0]
+        pas_data = self.read_pas_data(mrn)
         lims_data = self.read_lims_data(mrn)
         data = {
             "mrn": pas_data[0],
