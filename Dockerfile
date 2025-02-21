@@ -7,5 +7,6 @@ COPY requirements.txt /simulator/
 WORKDIR /simulator
 RUN python3 -m venv /simulator
 RUN /simulator/bin/pip3 install -r requirements.txt
+EXPOSE 8000
 ENTRYPOINT ["/simulator/bin/python3", "/simulator/main_simulator.py"]
 CMD ["--history=/data/history.csv"]
