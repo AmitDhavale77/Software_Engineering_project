@@ -21,7 +21,9 @@ class TestHL7MessageParser(unittest.TestCase):
             "PID|1||185620675||KAYLA HENRY||20211106|F\r"
         )
         parsed_message = self.parser.parse(message)
-        self.assertEqual(parsed_message, 'OTHER')
+        self.assertIsNone(parsed_message[0])
+        self.assertIsNone(parsed_message[1])
+        self.assertEqual(parsed_message[2], "error")
 
     
     def test_pas_discharge(self):
@@ -87,7 +89,6 @@ class TestHL7MessageParser(unittest.TestCase):
         parsed_message = self.parser.parse(message)
         self.assertEqual(parsed_message[1]['results'][0]['date'], '2024-01-20 22:43:00')
 
-
     def test_parse_oru_r01_with_hours(self):
         message = (
         "MSH|^~\&|SIMULATION|SOUTH RIVERSIDE|||20240331073300||ORU^R01|||2.5\r"
@@ -116,9 +117,9 @@ class TestHL7MessageParser(unittest.TestCase):
             "PID|1||185620675||KAYLA HENRY|||F\r"
         )
         parsed_message = self.parser.parse(message)
-        self.assertEqual(parsed_message[1]['mrn'], '185620675')
-        self.assertIsNone(parsed_message[1]['dob'])
-        self.assertEqual(parsed_message[1]['sex'], 1)
+        self.assertIsNone(parsed_message[0])
+        self.assertIsNone(parsed_message[1])
+        self.assertEqual(parsed_message[2], "error")
 
 
     def test_adt_a01_missing_sex(self):
@@ -127,9 +128,9 @@ class TestHL7MessageParser(unittest.TestCase):
             "PID|1||185620675||KAYLA HENRY||20211106|\r"
         )
         parsed_message = self.parser.parse(message)
-        self.assertEqual(parsed_message[1]['mrn'], '185620675')
-        self.assertEqual(parsed_message[1]['dob'], '2021-11-06 00:00:00')
-        self.assertIsNone(parsed_message[1]['sex'])
+        self.assertIsNone(parsed_message[0])
+        self.assertIsNone(parsed_message[1])
+        self.assertEqual(parsed_message[2], "error")
 
 
     def test_parse_oru_r01_missing_date(self):

@@ -89,7 +89,11 @@ if __name__ == "__main__":
         messages, buffer = simulator.parse_mllp_messages(buffer, "")
         for message in messages:
             messages_counter.inc() # increment counter
-            msg, fields = msg_parser.parse(message.decode("utf-8"))
+            msg, fields, status = msg_parser.parse(message.decode("utf-8"))
+            if status == "error":
+                s.sendall(create_acknowledgement("AA"))
+                logger.info("Acknowledgement sent")
+                continue
             mrn = fields["mrn"]
 
             if msg == "PAS_admit":
@@ -107,18 +111,19 @@ if __name__ == "__main__":
                 preds = predictor.predict(data)
                 logger.info(f"Prediction: {preds[0]}, made for MRN: {mrn}, timestamp: {preds[2]}")
 
+
                 if preds[0] == 1:
                     pos_counter.inc()
-                    pager_data = f"{mrn},{preds[2].strftime("%Y%m%d%H%M%S")}".encode("utf-8")
+                    pager_data = f"{mrn},{preds[2].strftime('%Y%m%d%H%M%S')}".encode("utf-8")
                     while True:
                         try:
                             r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=pager_data)
                             logger.info(f"Pager request sent successfully for MRN: {mrn}")
                             break
                         except Exception as e:
-                            http_counter.inc()
                             logger.warning(f"Pager request failed: {e}. Retrying in {MLLP_RETRY_SECONDS}s")
                             time.sleep(MLLP_RETRY_SECONDS)
-
+                            
             s.sendall(create_acknowledgement("AA"))
             logger.info("Acknowledgement sent")
+
