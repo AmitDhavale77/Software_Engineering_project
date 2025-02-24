@@ -1,6 +1,5 @@
 from hl7apy.parser import parse_message
 from datetime import datetime
-from acknowledgements import create_acknowledgement
 from hl7apy.exceptions import HL7apyException
 
 

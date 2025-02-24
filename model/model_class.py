@@ -9,7 +9,6 @@ class AKIPredictor:
             self.model = pickle.load(f)
 
     def preprocess_and_transform(self, input_dict):
-        mrn = input_dict["mrn"]
         dob = datetime.fromisoformat(input_dict["dob"])
 
         dates = input_dict["dates"]
@@ -24,9 +23,9 @@ class AKIPredictor:
         rv2 = latest_creatinine / np.median(creatinine_levels)
 
         new_data = np.asarray([age, sex, latest_creatinine, rv1, rv2])
-        return new_data, mrn, latest_date
+        return new_data, latest_date
 
     def predict(self, data):
-        processed_data, mrn, latest_date = self.preprocess_and_transform(data)
+        processed_data, latest_date = self.preprocess_and_transform(data)
         y_pred = self.model.predict(processed_data[None, :])[0]
-        return y_pred, mrn, latest_date
+        return y_pred, latest_date

@@ -1,11 +1,15 @@
 import os
+import gc
 import sys
 import time
+import pickle
 import socket
 import signal
 import logging
 import argparse
 import urllib.request
+from copy import deepcopy
+from threading import Thread
 
 from database import Database
 from parser import HL7MessageParser
@@ -30,8 +34,57 @@ pos_counter = Counter('pos_predictions', 'Number of positive AKI predictions mad
 
 MLLP_RETRY_SECONDS = 1
 
+if os.path.isfile("/state/lims_queue.pkl"):
+    with open("/state/lims_queue.pkl", "rb") as f:
+        lims_queue = pickle.load(f)
+    with open("/state/pager_queue.pkl", "rb") as f:
+        pager_queue = pickle.load(f)
+else:
+    lims_queue, pager_queue = [], []
 
-def connect_to_mllp_server(host, port):
+
+def process_lims_queue(predictor, logger):
+    while True:
+        lims_queue_copy = deepcopy(lims_queue)
+        db_copy = Database("/state/patients.db", "/state/blood_tests.db")
+
+        for lims_data in lims_queue_copy:
+            mrn, timestamp = lims_data
+            data = db_copy.fetch_data(mrn, timestamp)
+            if data is None:
+                continue
+
+            y_pred, test_date = predictor.predict(data)
+            logger.info(f"LIMS Queue, Prediction: {y_pred}, made for MRN: {mrn}, timestamp: {timestamp}")
+            if y_pred == 1:
+                pager_data = f"{mrn},{test_date.strftime('%Y%m%d%H%M%S')}".encode("utf-8")
+                pager_queue.append(pager_data)
+
+            lims_queue.remove(lims_data)
+
+        db_copy.close()
+        del lims_queue_copy, db_copy
+        gc.collect()
+        time.sleep(10)
+
+
+def process_pager_queue(pager_host, pager_port, logger):
+    while True:
+        pager_queue_copy = deepcopy(pager_queue)
+        for pager_data in pager_queue_copy:
+            try:
+                urllib.request.urlopen(f"http://{pager_host}:{pager_port}/page", timeout=1, data=pager_data)
+                logger.info(f"Pager queue, Pager request sent successfully for {pager_data.decode('utf-8')}")
+            except:
+                continue
+            pager_queue.remove(pager_data)
+
+        del pager_queue_copy
+        gc.collect()
+        time.sleep(60)
+
+
+def connect_to_mllp_server(host, port, logger):
     while True:
         mllp_counter.inc()
         try:
@@ -66,34 +119,56 @@ if __name__ == "__main__":
 
     predictor = AKIPredictor("/simulator/xgb_model.pkl")
 
-    s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT)
+    s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT, logger)
     buffer = b""  # Buffer to store incomplete messages
 
     def graceful_shutdown(signum, frame):
         logger.info("Shutting down system.")
         db.close()
         s.close()
+        with open("/state/lims_queue.pkl", "wb") as f:
+            pickle.dump(lims_queue, f)
+        with open("/state/pager_queue.pkl", "wb") as f:
+            pickle.dump(pager_queue, f)
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, graceful_shutdown)
 
+    lims_queue_thread = Thread(target=process_lims_queue, args=(predictor, logger), daemon=True)
+    lims_queue_thread.start()
+
+    pager_queue_thread = Thread(target=process_pager_queue, args=(PAGER_HOST, PAGER_PORT, logger), daemon=True)
+    pager_queue_thread.start()
+
     while True:
-        data = s.recv(simulator.MLLP_BUFFER_SIZE)
+        try:
+            data = s.recv(simulator.MLLP_BUFFER_SIZE)
+        except Exception as e:
+            logger.warning(f"MLLP connection failed: {e}. Reconnecting")
+            s.close()
+            s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT, logger)
+            continue
+
         if len(data) == 0:
             logger.warning("MLLP connection closed by peer. Reconnecting")
             s.close()
-            s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT)
+            s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT, logger)
             continue
 
         buffer += data  # Append received data to buffer
-        messages, buffer = simulator.parse_mllp_messages(buffer, "")
+        try:
+            messages, buffer = simulator.parse_mllp_messages(buffer, "")
+        except Exception as e:
+            logger.warning(f"Couldn't parse buffer: {buffer} due to exception: {e}")
+            messages = []
+
         for message in messages:
-            messages_counter.inc() # increment counter
+            messages_counter.inc()  # increment counter
             msg, fields, status = msg_parser.parse(message.decode("utf-8"))
             if status == "error":
-                s.sendall(create_acknowledgement("AA"))
-                logger.info("Acknowledgement sent")
+                logger.warning(f"Couldn't parse message: {message}")
                 continue
+
             mrn = fields["mrn"]
 
             if msg == "PAS_admit":
@@ -107,23 +182,34 @@ if __name__ == "__main__":
             logger.debug(f"Parsed fields: {fields}")
 
             if msg == "LIMS":
-                data = db.fetch_data(mrn)
-                preds = predictor.predict(data)
-                logger.info(f"Prediction: {preds[0]}, made for MRN: {mrn}, timestamp: {preds[2]}")
+                for obs in fields["results"]:
+                    timestamp = obs["date"]
+                    data = db.fetch_data(mrn, timestamp)
+                    if data is None:
+                        logger.warning("Couldn't find PAS data. Added to LIMS queue")
+                        lims_queue.append((mrn, timestamp))
+                        continue
 
+                    y_pred, test_date = predictor.predict(data)
+                    logger.info(f"Prediction: {y_pred}, made for MRN: {mrn}, timestamp: {timestamp}")
 
-                if preds[0] == 1:
-                    pos_counter.inc()
-                    pager_data = f"{mrn},{preds[2].strftime('%Y%m%d%H%M%S')}".encode("utf-8")
-                    while True:
+                    if y_pred == 1:
+                        pos_counter.inc()
+                        pager_data = f"{mrn},{test_date.strftime('%Y%m%d%H%M%S')}".encode("utf-8")
                         try:
-                            r = urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", data=pager_data)
+                            urllib.request.urlopen(f"http://{PAGER_HOST}:{PAGER_PORT}/page", timeout=1, data=pager_data)
                             logger.info(f"Pager request sent successfully for MRN: {mrn}")
-                            break
                         except Exception as e:
-                            logger.warning(f"Pager request failed: {e}. Retrying in {MLLP_RETRY_SECONDS}s")
-                            time.sleep(MLLP_RETRY_SECONDS)
-                            
-            s.sendall(create_acknowledgement("AA"))
-            logger.info("Acknowledgement sent")
+                            logger.warning(f"Pager request failed: {e}. Added to pager queue")
+                            pager_queue.append(pager_data)
 
+        ack = create_acknowledgement("AA")
+        while True:
+            try:
+                s.sendall(ack)
+                logger.info("Acknowledgement sent")
+                break
+            except Exception as e:
+                logger.warning(f"MLLP connection failed: {e}. Reconnecting")
+                s.close()
+                s = connect_to_mllp_server(MLLP_HOST, MLLP_PORT, logger)

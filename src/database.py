@@ -9,10 +9,10 @@ class Database:
     def __init__(self, pat_db_name="patients.db", tests_db_name="blood_tests.db"):
         self.db_exists = os.path.exists(pat_db_name)
 
-        self.pat_db = sqlite3.connect(pat_db_name)
+        self.pat_db = sqlite3.connect(pat_db_name, check_same_thread=False)
         self.pat_cur = self.pat_db.cursor()
 
-        self.tests_db = sqlite3.connect(tests_db_name)
+        self.tests_db = sqlite3.connect(tests_db_name, check_same_thread=False)
         self.tests_cur = self.tests_db.cursor()
 
         if not self.db_exists:
@@ -58,13 +58,18 @@ class Database:
         )
         return res.fetchone()
 
-    def read_lims_data(self, mrn):
-        res = self.tests_cur.execute(f"SELECT * FROM blood_tests WHERE mrn={mrn}")
+    def read_lims_data(self, mrn, timestamp):
+        res = self.tests_cur.execute(
+            f"SELECT * FROM blood_tests WHERE mrn={mrn} AND timestamp<='{timestamp}' ORDER BY timestamp"
+        )
         return res.fetchall()
 
-    def fetch_data(self, mrn):
+    def fetch_data(self, mrn, timestamp):
         pas_data = self.read_pas_data(mrn)
-        lims_data = self.read_lims_data(mrn)
+        if pas_data is None:
+            return None
+
+        lims_data = self.read_lims_data(mrn, timestamp)
         data = {
             "mrn": pas_data[0],
             "dob": pas_data[1],
