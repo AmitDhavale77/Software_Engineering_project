@@ -23,6 +23,9 @@ import simulator
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("/state/logs.txt"),
+        logging.StreamHandler()]
 )
 
 messages_counter = Counter('messaged_received', 'Number of messages received') 
@@ -134,6 +137,8 @@ if __name__ == "__main__":
             pickle.dump(lims_queue, f)
         with open("/state/pager_queue.pkl", "wb") as f:
             pickle.dump(pager_queue, f)
+        logger.info("Received SIGTERM. Flushing and shutting down...")
+        logging.shutdown() 
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, graceful_shutdown)

@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
       - name: aki-detection
-        image: imperialswemlsspring2025.azurecr.io/coursework4-alamillo
+        image: imperialswemlsspring2025.azurecr.io/coursework5-alamillo
         # Replace this with the correct command for your solution
         command: ["/simulator/bin/python3", "/simulator/main_simulator.py"]
         args:
@@ -39,9 +39,9 @@ spec:
         - "--history=/data/history.csv"
         env:
         - name: MLLP_ADDRESS
-          value: alamillo-simulator.coursework4:8440
+          value: alamillo-simulator.coursework5:8440
         - name: PAGER_ADDRESS
-          value: alamillo-simulator.coursework4:8441
+          value: alamillo-simulator.coursework5:8441
         - name: PYTHONUNBUFFERED
           value: '1'
         ports:
@@ -59,7 +59,7 @@ spec:
             cpu: 1
       initContainers:
       - name: copy-hospital-history
-        image: imperialswemlsspring2025.azurecr.io/coursework4-history
+        image: imperialswemlsspring2025.azurecr.io/coursework5-history
         volumeMounts:
           - mountPath: "/data"
             name: hospital-history
