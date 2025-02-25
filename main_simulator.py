@@ -45,6 +45,9 @@ else:
 
 def process_lims_queue(predictor, logger):
     while True:
+        if not lims_queue:
+            continue
+
         lims_queue_copy = deepcopy(lims_queue)
         db_copy = Database("/state/patients.db", "/state/blood_tests.db")
 
@@ -65,11 +68,13 @@ def process_lims_queue(predictor, logger):
         db_copy.close()
         del lims_queue_copy, db_copy
         gc.collect()
-        time.sleep(10)
 
 
 def process_pager_queue(pager_host, pager_port, logger):
     while True:
+        if not pager_queue:
+            continue
+
         pager_queue_copy = deepcopy(pager_queue)
         for pager_data in pager_queue_copy:
             try:
@@ -81,7 +86,6 @@ def process_pager_queue(pager_host, pager_port, logger):
 
         del pager_queue_copy
         gc.collect()
-        time.sleep(60)
 
 
 def connect_to_mllp_server(host, port, logger):
