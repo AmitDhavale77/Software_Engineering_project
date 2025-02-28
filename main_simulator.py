@@ -49,6 +49,7 @@ else:
 def process_lims_queue(predictor, logger):
     while True:
         if not lims_queue:
+            time.sleep(1)
             continue
 
         lims_queue_copy = deepcopy(lims_queue)
@@ -76,6 +77,7 @@ def process_lims_queue(predictor, logger):
 def process_pager_queue(pager_host, pager_port, logger):
     while True:
         if not pager_queue:
+            time.sleep(1)
             continue
 
         pager_queue_copy = deepcopy(pager_queue)
